@@ -1,7 +1,7 @@
 {
   "name": "cetus-dlmm-amm-strategy",
   "version": "1.0.0",
-  "description": "自动做市策略 for Cetus DLMM",
+  "description": "Automated Market Making Strategy for Cetus DLMM",
   "main": "run-strategy.ts",
   "type": "module",
   "scripts": {

@@ -656,14 +656,14 @@ export class AMMStrategy {
   }
 
   /**
-   * 延迟函数
+   * Delay function
    */
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
-   * 获取策略状态
+   * Get strategy status
    */
   getStatus(): StrategyConfig & PositionState {
     return {
