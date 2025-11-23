@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun add:*)",
+      "Bash(bun run:*)",
+      "Bash(claude skills list:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
