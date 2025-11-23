@@ -396,50 +396,50 @@ export class AMMStrategy {
   }
 
   /**
-   * 移除流动性
-   * 根据当前策略状态决定移除哪种代币
+   * Remove liquidity
+   * Determine which token to remove based on current strategy state
    */
   private async removeLiquidity(positionId: string): Promise<void> {
     try {
-      // 获取仓位信息
+      // Get position information
       const position = await this.sdk.Position.getPosition(positionId);
 
-      // 获取池信息
+      // Get pool information
       const pool = await this.sdk.Pool.getPool(this.poolAddress!);
 
-      // 获取当前 active bin 信息
+      // Get current active bin information
       const activeBin = await this.sdk.Pool.getBinInfo(
         pool.bin_manager.bin_manager_handle,
         pool.active_id,
         pool.bin_step
       );
 
-      // 解析流动性份额数据
+      // Parse liquidity shares data
       const liquiditySharesData = parseLiquidityShares(
-        position.liquidity_shares, // 使用正确的属性名
+        position.liquidity_shares, // Use correct property name
         pool.bin_step,
         position.lower_bin_id,
         activeBin
       );
 
-      // 根据当前策略状态决定移除哪种代币
-      // - 如果当前持有 USDT，移除流动性时应该获取 USDC（因为我们正在买入 USDC）
-      // - 如果当前持有 USDC，移除流动性时应该获取 USDT（因为我们正在买入 USDT）
-      const isOnlyA = this.state.currentToken === 'USDT'; // true: 只移除 tokenA (USDC), false: 只移除 tokenB (USDT)
+      // Determine which token to remove based on current strategy state
+      // - If currently holding USDT, remove liquidity to get USDC (because we're buying USDC)
+      // - If currently holding USDC, remove liquidity to get USDT (because we're buying USDT)
+      const isOnlyA = this.state.currentToken === 'USDT'; // true: remove only tokenA (USDC), false: remove only tokenB (USDT)
 
-      console.log(`🔄 移除流动性，当前持有: ${this.state.currentToken}, 移除代币: ${isOnlyA ? 'USDC' : 'USDT'}`);
+      console.log(`🔄 Removing liquidity, currently holding: ${this.state.currentToken}, removing token: ${isOnlyA ? 'USDC' : 'USDT'}`);
 
-      // 计算移除流动性信息 - 只移除一种代币
+      // Calculate remove liquidity information - remove only one token
       const removeOption = {
-        bins: liquiditySharesData.bins, // 使用解析后的 bins 数据
+        bins: liquiditySharesData.bins, // Use parsed bins data
         active_id: pool.active_id,
         is_only_a: isOnlyA, // true for token A (USDC), false for token B (USDT)
-        coin_amount: this.config.positionSize // 移除指定金额
+        coin_amount: this.config.positionSize // Remove specified amount
       };
 
       const removalInfo = this.sdk.Position.calculateRemoveLiquidityInfo(removeOption);
 
-      // 移除流动性
+      // Remove liquidity
       const removeLiquidityOption = {
         pool_id: this.poolAddress!,
         position_id: positionId,
@@ -455,39 +455,39 @@ export class AMMStrategy {
 
       const tx = this.sdk.Position.removeLiquidityPayload(removeLiquidityOption);
 
-      // 执行交易
+      // Execute transaction
       const result = await this.client.signAndExecuteTransaction({
         transaction: tx,
         signer: this.keypair,
         options: { showEffects: true }
       });
 
-      console.log(`✅ 移除流动性成功，获取 ${isOnlyA ? 'USDC' : 'USDT'}，交易哈希: ${result.digest}`);
+      console.log(`✅ Successfully removed liquidity, obtained ${isOnlyA ? 'USDC' : 'USDT'}, transaction hash: ${result.digest}`);
 
-      // 清空仓位信息
+      // Clear position information
       this.state.currentPositionId = undefined;
       this.state.currentBinId = undefined;
     } catch (error) {
-      console.error('❌ 移除流动性失败:', error);
+      console.error('❌ Failed to remove liquidity:', error);
       throw error;
     }
   }
 
   /**
-   * 领取交易费和奖励
-   * 在移除流动性前或定期领取累积的费用
+   * Collect trading fees and rewards
+   * Collect accumulated fees before removing liquidity or periodically
    */
   private async collectFeesAndRewards(positionId: string): Promise<void> {
     try {
       if (!this.poolAddress) {
-        console.log('⚠️ 池地址未初始化，跳过领取费用');
+        console.log('⚠️ Pool address not initialized, skipping fee collection');
         return;
       }
 
-      // 获取池信息
+      // Get pool information
       const pool = await this.sdk.Pool.getPool(this.poolAddress);
 
-      // 构建领取费用和奖励的交易
+      // Build transaction to collect fees and rewards
       const tx = this.sdk.Position.collectRewardAndFeePayload([{
         pool_id: this.poolAddress,
         position_id: positionId,
@@ -496,27 +496,27 @@ export class AMMStrategy {
         coin_type_b: this.config.tokenB
       }]);
 
-      // 执行交易
+      // Execute transaction
       const result = await this.client.signAndExecuteTransaction({
         transaction: tx,
         signer: this.keypair,
         options: { showEffects: true }
       });
 
-      console.log(`💰 领取费用和奖励成功，交易哈希: ${result.digest}`);
+      console.log(`💰 Successfully collected fees and rewards, transaction hash: ${result.digest}`);
 
     } catch (error) {
-      console.error('❌ 领取费用和奖励失败:', error);
-      // 不抛出错误，因为领取失败不应该阻止策略执行
+      console.error('❌ Failed to collect fees and rewards:', error);
+      // Don't throw error, because collection failure shouldn't stop strategy execution
     }
   }
 
   /**
-   * 价格转 bin ID
+   * Convert price to bin ID
    */
   private priceToBinId(price: string): number {
-    const decimalA = 6; // USDC 精度
-    const decimalB = 6; // USDT 精度
+    const decimalA = 6; // USDC precision
+    const decimalB = 6; // USDT precision
 
     return BinUtils.getBinIdFromPrice(
       price,
@@ -528,7 +528,7 @@ export class AMMStrategy {
   }
 
   /**
-   * 查询当前代币余额
+   * Query current token balances
    */
   private async getTokenBalances(): Promise<{ usdc: string; usdt: string }> {
     try {
@@ -545,21 +545,21 @@ export class AMMStrategy {
         usdt: new BN(usdtBalance.totalBalance).toString()
       };
 
-      // 更新状态中的余额信息
+      // Update balance information in state
       this.state.currentBalance = balances;
 
-      console.log(`💰 余额查询: USDC=${balances.usdc}, USDT=${balances.usdt}`);
+      console.log(`💰 Balance query: USDC=${balances.usdc}, USDT=${balances.usdt}`);
       return balances;
 
     } catch (error) {
-      console.error('❌ 查询余额失败:', error);
-      // 返回默认值
+      console.error('❌ Failed to query balances:', error);
+      // Return default values
       return { usdc: '0', usdt: '0' };
     }
   }
 
   /**
-   * 检测余额并选择初始代币
+   * Detect balances and select initial token
    */
   private async detectInitialToken(): Promise<void> {
     try {
@@ -568,46 +568,46 @@ export class AMMStrategy {
       const usdcBalance = parseFloat(balances.usdc);
       const usdtBalance = parseFloat(balances.usdt);
 
-      console.log(`💰 余额检测: USDC=${usdcBalance}, USDT=${usdtBalance}`);
+      console.log(`💰 Balance detection: USDC=${usdcBalance}, USDT=${usdtBalance}`);
 
       if (usdcBalance > usdtBalance) {
         this.state.currentToken = 'USDC';
-        console.log(`🎯 选择初始代币: USDC (余额较多: ${usdcBalance} > ${usdtBalance})`);
+        console.log(`🎯 Selected initial token: USDC (higher balance: ${usdcBalance} > ${usdtBalance})`);
       } else if (usdtBalance > usdcBalance) {
         this.state.currentToken = 'USDT';
-        console.log(`🎯 选择初始代币: USDT (余额较多: ${usdtBalance} > ${usdcBalance})`);
+        console.log(`🎯 Selected initial token: USDT (higher balance: ${usdtBalance} > ${usdcBalance})`);
       } else {
-        // 余额相等时，默认使用 USDT
+        // When balances are equal, default to USDT
         this.state.currentToken = 'USDT';
-        console.log(`🎯 选择初始代币: USDT (余额相等，使用默认)`);
+        console.log(`🎯 Selected initial token: USDT (balances equal, using default)`);
       }
 
-      console.log(`📊 初始策略方向: 卖出 ${this.state.currentToken}，买入 ${this.state.currentToken === 'USDC' ? 'USDT' : 'USDC'}`);
+      console.log(`📊 Initial strategy direction: Sell ${this.state.currentToken}, buy ${this.state.currentToken === 'USDC' ? 'USDT' : 'USDC'}`);
 
     } catch (error) {
-      console.error('❌ 余额检测失败:', error);
+      console.error('❌ Balance detection failed:', error);
 
-      // 检查是否有现有仓位
+      // Check if there are existing positions
       const existingPositions = await this.getExistingPositions();
       if (existingPositions.length > 0) {
-        console.log('📋 发现现有仓位，使用现有仓位状态');
-        // 如果有现有仓位，保持当前状态不变，让策略继续运行
+        console.log('📋 Found existing positions, using existing position state');
+        // If there are existing positions, keep current state unchanged and let strategy continue
         return;
       }
 
-      // 如果没有现有仓位，使用默认代币
-      console.log('⚠️ 使用默认代币 USDT');
-      this.state.currentToken = 'USDT'; // 默认使用 USDT
+      // If no existing positions, use default token
+      console.log('⚠️ Using default token USDT');
+      this.state.currentToken = 'USDT'; // Default to USDT
     }
   }
 
 
   /**
-   * 从交易结果中提取仓位 ID
+   * Extract position ID from transaction result
    */
   private extractPositionId(result: any): string {
     try {
-      // 从交易结果中查找创建的 Position 对象
+      // Find created Position object from transaction result
       const createdObjects = result.effects?.created || [];
       const positionObject = createdObjects.find((obj: any) =>
         obj.objectType?.includes('position::Position')
@@ -617,7 +617,7 @@ export class AMMStrategy {
         return positionObject.objectId;
       }
 
-      // 如果没找到，尝试从事件中查找
+      // If not found, try to find from events
       const events = result.effects?.events || [];
       for (const event of events) {
         if (event.type === 'position::PositionCreated') {
@@ -625,16 +625,16 @@ export class AMMStrategy {
         }
       }
 
-      console.warn('⚠️ 无法从交易结果中提取仓位 ID，使用默认值');
+      console.warn('⚠️ Unable to extract position ID from transaction result, using default value');
       return '0xposition123';
     } catch (error) {
-      console.error('❌ 提取仓位 ID 失败:', error);
+      console.error('❌ Failed to extract position ID:', error);
       return '0xposition123';
     }
   }
 
   /**
-   * 查询当前地址的所有仓位
+   * Query all positions for current address
    */
   private async getExistingPositions(): Promise<string[]> {
     try {
@@ -647,10 +647,10 @@ export class AMMStrategy {
       });
 
       const positionIds = ownedObjects.data.map(obj => obj.data?.objectId).filter((id): id is string => Boolean(id));
-      console.log(`📋 找到 ${positionIds.length} 个现有仓位`);
+      console.log(`📋 Found ${positionIds.length} existing positions`);
       return positionIds;
     } catch (error) {
-      console.error('❌ 查询现有仓位失败:', error);
+      console.error('❌ Failed to query existing positions:', error);
       return [];
     }
   }
@@ -673,27 +673,27 @@ export class AMMStrategy {
   }
 
   /**
-   * 获取当前价格解释
+   * Get current price explanation
    */
   async getPriceExplanation(): Promise<string> {
     try {
       const currentPrice = await this.getCurrentPrice();
       return `
-📊 价格解释:
-- 当前价格: ${currentPrice} (USDC/USDT)
-- 当价格 > 1 时: USDC 相对于 USDT 升值
-- 当价格 < 1 时: USDC 相对于 USDT 贬值
-- 当前持有: ${this.state.currentToken}
-- 策略区间: ${this.config.lowerPrice} - ${this.config.upperPrice}
+📊 Price explanation:
+- Current price: ${currentPrice} (USDC/USDT)
+- When price > 1: USDC appreciates relative to USDT
+- When price < 1: USDC depreciates relative to USDT
+- Currently holding: ${this.state.currentToken}
+- Strategy range: ${this.config.lowerPrice} - ${this.config.upperPrice}
     `;
     } catch (error) {
       return `
-📊 价格解释:
-- 当前价格: 获取失败 (USDC/USDT)
-- 当价格 > 1 时: USDC 相对于 USDT 升值
-- 当价格 < 1 时: USDC 相对于 USDT 贬值
-- 当前持有: ${this.state.currentToken}
-- 策略区间: ${this.config.lowerPrice} - ${this.config.upperPrice}
+📊 Price explanation:
+- Current price: Failed to get (USDC/USDT)
+- When price > 1: USDC appreciates relative to USDT
+- When price < 1: USDC depreciates relative to USDT
+- Currently holding: ${this.state.currentToken}
+- Strategy range: ${this.config.lowerPrice} - ${this.config.upperPrice}
     `;
     }
   }
